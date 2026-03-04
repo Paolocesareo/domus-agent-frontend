@@ -52,7 +52,6 @@ export default function SetupPage() {
           nome: studioName,
           email: user.email,
           domustudio_credentials_encrypted: JSON.stringify({ cid, user: domUser, password: domPassword }),
-          sync_status: 'pending',
         })
         .select()
         .single()
