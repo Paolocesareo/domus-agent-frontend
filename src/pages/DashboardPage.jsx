@@ -128,6 +128,8 @@ export default function DashboardPage() {
   useEffect(() => {
     if (studio) {
       loadData()
+    } else {
+      setLoading(false)
     }
   }, [studio])
 
