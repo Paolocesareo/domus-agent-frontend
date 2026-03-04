@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
-import { Building2, KeyRound, Plus, Trash2, AlertCircle } from 'lucide-react'
+import { Building2, Plus, Trash2, AlertCircle } from 'lucide-react'
 
 export default function SetupPage() {
   const { user, refreshStudio } = useAuth()
@@ -84,9 +84,7 @@ export default function SetupPage() {
     <div className="min-h-screen bg-surface flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-accent/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <KeyRound className="w-8 h-8 text-accent" />
-          </div>
+          <img src="/logo.png" alt="Domus Agent" className="w-16 h-16 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-text-primary">Configura il tuo studio</h1>
           <p className="text-text-secondary mt-1">
             Inserisci le credenziali Domustudio per avviare la sincronizzazione

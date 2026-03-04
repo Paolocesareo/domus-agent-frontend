@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { Building2, Eye, EyeOff, ArrowRight } from 'lucide-react'
+import { Eye, EyeOff, ArrowRight } from 'lucide-react'
 
 export default function LoginPage() {
   const { signIn, signUp } = useAuth()
@@ -39,9 +39,7 @@ export default function LoginPage() {
     return (
       <div className="min-h-screen bg-surface flex items-center justify-center p-4">
         <div className="bg-surface-card rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
-          <div className="w-16 h-16 bg-success/10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Building2 className="w-8 h-8 text-success" />
-          </div>
+          <img src="/logo.png" alt="Domus Agent" className="w-16 h-16 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-text-primary mb-2">Registrazione completata!</h2>
           <p className="text-text-secondary">
             Controlla la tua email per confermare l'account, poi torna qui per accedere.
@@ -62,9 +60,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         {/* Logo e titolo */}
         <div className="text-center mb-8">
-          <div className="w-20 h-20 bg-primary rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
-            <Building2 className="w-10 h-10 text-white" />
-          </div>
+          <img src="/logo.png" alt="Domus Agent" className="w-20 h-20 mx-auto mb-4" />
           <h1 className="text-3xl font-bold text-text-primary tracking-tight">
             Domus Agent
           </h1>
