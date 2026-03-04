@@ -3,7 +3,8 @@ import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import {
   Building2, MapPin, Home, Users, ArrowLeft, X,
-  Phone, Mail, Shield, User, FileText, MapPinned
+  Phone, Mail, Shield, User, FileText, MapPinned,
+  Search, ChevronUp, ChevronDown
 } from 'lucide-react'
 
 /* ─── Lista condomini ─── */
@@ -164,6 +165,55 @@ function CondominiDettaglio({ edificio, onBack }) {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
+  const [search, setSearch] = useState('')
+  const [sortCol, setSortCol] = useState(null)
+  const [sortDir, setSortDir] = useState('asc')
+
+  function handleSort(col) {
+    if (sortCol === col) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortCol(col)
+      setSortDir('asc')
+    }
+  }
+
+  function getValue(row, col) {
+    if (col === 'interno') return row.unita.interno || ''
+    if (col === 'piano') return row.unita.piano || ''
+    if (col === 'subalterno') return row.unita.subalterno || ''
+    if (col === 'proprietario') return row.proprietario?.descrizione || ''
+    if (col === 'conduttore') return row.conduttore?.descrizione || ''
+    return ''
+  }
+
+  function getFilteredSorted() {
+    let filtered = rows
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      filtered = rows.filter(r =>
+        (r.proprietario?.descrizione || '').toLowerCase().includes(q) ||
+        (r.conduttore?.descrizione || '').toLowerCase().includes(q) ||
+        (r.unita.interno || '').toLowerCase().includes(q) ||
+        (r.unita.subalterno || '').toLowerCase().includes(q) ||
+        (r.unita.piano || '').toLowerCase().includes(q) ||
+        (r.unita.scala || '').toLowerCase().includes(q)
+      )
+    }
+    if (sortCol) {
+      filtered = [...filtered].sort((a, b) => {
+        let va = getValue(a, sortCol)
+        let vb = getValue(b, sortCol)
+        // prova numerico
+        const na = parseFloat(va), nb = parseFloat(vb)
+        if (!isNaN(na) && !isNaN(nb)) {
+          return sortDir === 'asc' ? na - nb : nb - na
+        }
+        return sortDir === 'asc' ? va.localeCompare(vb, 'it') : vb.localeCompare(va, 'it')
+      })
+    }
+    return filtered
+  }
 
   useEffect(() => { loadDettaglio() }, [edificio])
 
@@ -271,47 +321,88 @@ function CondominiDettaglio({ edificio, onBack }) {
           <div className="w-6 h-6 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
         </div>
       ) : (
-        /* ─── Tabella stile Danea ─── */
-        <div className="bg-surface-card rounded-xl border border-border/50 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="bg-primary/5 border-b border-border/50">
-                  <th className="text-left px-3 py-2.5 font-semibold text-text-secondary whitespace-nowrap">Sub.</th>
-                  <th className="text-left px-3 py-2.5 font-semibold text-text-secondary whitespace-nowrap">Tipo</th>
-                  <th className="text-left px-3 py-2.5 font-semibold text-text-secondary whitespace-nowrap">Int.</th>
-                  <th className="text-left px-3 py-2.5 font-semibold text-text-secondary whitespace-nowrap">Piano</th>
-                  <th className="text-left px-3 py-2.5 font-semibold text-text-secondary whitespace-nowrap">Scala</th>
-                  <th className="text-left px-3 py-2.5 font-semibold text-text-secondary whitespace-nowrap min-w-[200px]">Proprietario</th>
-                  <th className="text-left px-3 py-2.5 font-semibold text-text-secondary whitespace-nowrap min-w-[200px]">Conduttore</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/20">
-                {rows.map((row, i) => (
-                  <tr
-                    key={row.unita.id}
-                    onClick={() => setSelected(row)}
-                    className={`cursor-pointer transition-colors ${
-                      i % 2 === 0 ? 'bg-white' : 'bg-surface/40'
-                    } hover:bg-primary/5`}
-                  >
-                    <td className="px-3 py-2 text-text-primary font-medium whitespace-nowrap">{row.unita.subalterno || '-'}</td>
-                    <td className="px-3 py-2 text-text-secondary whitespace-nowrap">{row.unita.tipo || '-'}</td>
-                    <td className="px-3 py-2 text-text-primary whitespace-nowrap">{row.unita.interno || '-'}</td>
-                    <td className="px-3 py-2 text-text-secondary whitespace-nowrap">{row.unita.piano || '-'}</td>
-                    <td className="px-3 py-2 text-text-secondary whitespace-nowrap">{row.unita.scala || '-'}</td>
-                    <td className="px-3 py-2 text-text-primary font-medium truncate max-w-[250px]">
-                      {row.proprietario?.descrizione || '-'}
-                    </td>
-                    <td className="px-3 py-2 text-text-secondary truncate max-w-[200px]">
-                      {row.conduttore?.descrizione || ''}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <>
+          {/* Ricerca */}
+          <div className="relative mb-4">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Cerca per nome, interno, piano..."
+              className="w-full pl-9 pr-4 py-2.5 bg-surface-card border border-border/50 rounded-xl text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
+            />
           </div>
-        </div>
+
+          {/* Tabella */}
+          {(() => {
+            const filtered = getFilteredSorted()
+            const SortIcon = ({ col }) => {
+              if (sortCol !== col) return <ChevronDown className="w-3 h-3 text-text-muted/40" />
+              return sortDir === 'asc'
+                ? <ChevronUp className="w-3 h-3 text-primary" />
+                : <ChevronDown className="w-3 h-3 text-primary" />
+            }
+            return (
+              <div className="bg-surface-card rounded-xl border border-border/50 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-primary/5 border-b border-border/50">
+                        <th onClick={() => handleSort('subalterno')} className="text-left px-3 py-2.5 font-semibold text-text-secondary whitespace-nowrap cursor-pointer hover:text-primary select-none">
+                          <span className="inline-flex items-center gap-1">Sub. <SortIcon col="subalterno" /></span>
+                        </th>
+                        <th className="text-left px-3 py-2.5 font-semibold text-text-secondary whitespace-nowrap">Tipo</th>
+                        <th onClick={() => handleSort('interno')} className="text-left px-3 py-2.5 font-semibold text-text-secondary whitespace-nowrap cursor-pointer hover:text-primary select-none">
+                          <span className="inline-flex items-center gap-1">Int. <SortIcon col="interno" /></span>
+                        </th>
+                        <th onClick={() => handleSort('piano')} className="text-left px-3 py-2.5 font-semibold text-text-secondary whitespace-nowrap cursor-pointer hover:text-primary select-none">
+                          <span className="inline-flex items-center gap-1">Piano <SortIcon col="piano" /></span>
+                        </th>
+                        <th className="text-left px-3 py-2.5 font-semibold text-text-secondary whitespace-nowrap">Scala</th>
+                        <th onClick={() => handleSort('proprietario')} className="text-left px-3 py-2.5 font-semibold text-text-secondary whitespace-nowrap cursor-pointer hover:text-primary select-none min-w-[200px]">
+                          <span className="inline-flex items-center gap-1">Proprietario <SortIcon col="proprietario" /></span>
+                        </th>
+                        <th onClick={() => handleSort('conduttore')} className="text-left px-3 py-2.5 font-semibold text-text-secondary whitespace-nowrap cursor-pointer hover:text-primary select-none min-w-[200px]">
+                          <span className="inline-flex items-center gap-1">Conduttore <SortIcon col="conduttore" /></span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/20">
+                      {filtered.length === 0 ? (
+                        <tr><td colSpan={7} className="px-3 py-6 text-center text-text-muted">Nessun risultato</td></tr>
+                      ) : filtered.map((row, i) => (
+                        <tr
+                          key={row.unita.id}
+                          onClick={() => setSelected(row)}
+                          className={`cursor-pointer transition-colors ${
+                            i % 2 === 0 ? 'bg-white' : 'bg-surface/40'
+                          } hover:bg-primary/5`}
+                        >
+                          <td className="px-3 py-2 text-text-primary font-medium whitespace-nowrap">{row.unita.subalterno || '-'}</td>
+                          <td className="px-3 py-2 text-text-secondary whitespace-nowrap">{row.unita.tipo || '-'}</td>
+                          <td className="px-3 py-2 text-text-primary whitespace-nowrap">{row.unita.interno || '-'}</td>
+                          <td className="px-3 py-2 text-text-secondary whitespace-nowrap">{row.unita.piano || '-'}</td>
+                          <td className="px-3 py-2 text-text-secondary whitespace-nowrap">{row.unita.scala || '-'}</td>
+                          <td className="px-3 py-2 text-text-primary font-medium truncate max-w-[250px]">
+                            {row.proprietario?.descrizione || '-'}
+                          </td>
+                          <td className="px-3 py-2 text-text-secondary truncate max-w-[200px]">
+                            {row.conduttore?.descrizione || ''}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {/* Footer conteggio */}
+                <div className="px-3 py-2 border-t border-border/30 text-xs text-text-muted">
+                  {filtered.length} di {rows.length} unità
+                </div>
+              </div>
+            )
+          })()}
+        </>
       )}
 
       {/* Pannello laterale */}
