@@ -56,7 +56,7 @@ export default function CondominiPage() {
     <div className="p-6 lg:p-8 max-w-6xl">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-text-primary">Condomini</h1>
-        <p className="text-text-secondary text-sm mt-1">Tutti gli edifici gestiti dal tuo studio</p>
+        <p className="text-text-secondary text-sm mt-1">Tutti i condomini gestiti dal tuo studio</p>
       </div>
 
       {loading ? (
