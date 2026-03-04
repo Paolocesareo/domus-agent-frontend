@@ -73,26 +73,26 @@ function DetailPanel({ unita, proprietario, conduttore, onClose }) {
   return (
     <>
       {/* Overlay */}
-      <div className="fixed inset-0 bg-black/20 z-40" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
 
       {/* Panel */}
-      <div className="fixed top-0 right-0 h-full w-full max-w-md bg-surface-card shadow-2xl z-50 overflow-y-auto animate-slide-in">
+      <div className="fixed top-0 right-0 h-full w-full max-w-md bg-white shadow-2xl z-50 overflow-y-auto animate-slide-in">
         {/* Header */}
-        <div className="sticky top-0 bg-primary px-5 py-4 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-primary px-5 py-5 flex items-center justify-between z-10">
           <div className="text-white min-w-0">
-            <h2 className="font-bold text-base truncate">{nome}</h2>
-            <p className="text-white/60 text-xs mt-0.5">
+            <h2 className="font-bold text-lg truncate">{nome}</h2>
+            <p className="text-white/70 text-sm mt-1 font-medium">
               Sub. {unita.subalterno || '-'} · Int. {unita.interno || '-'} · Piano {unita.piano || '-'}
             </p>
           </div>
-          <button onClick={onClose} className="text-white/60 hover:text-white p-1">
+          <button onClick={onClose} className="text-white/70 hover:text-white p-1.5 bg-white/10 rounded-lg">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="p-5 space-y-5">
+        <div className="p-5 space-y-4">
           {/* Unità */}
-          <Section icon={Home} title="Unità">
+          <Section icon={Home} title="Unità" color="primary">
             <Row label="Subalterno" value={unita.subalterno} />
             <Row label="Interno" value={unita.interno} />
             <Row label="Piano" value={unita.piano} />
@@ -104,8 +104,8 @@ function DetailPanel({ unita, proprietario, conduttore, onClose }) {
 
           {/* Proprietario */}
           {proprietario && (
-            <Section icon={User} title="Proprietario">
-              <Row label="Nome" value={proprietario.descrizione} />
+            <Section icon={User} title="Proprietario" color="accent">
+              <Row label="Nome" value={proprietario.descrizione} bold />
               <Row label="Codice Fiscale" value={proprietario.codice_fiscale} />
               <Row label="P. IVA" value={proprietario.partita_iva} />
               <Row label="Indirizzo" value={[proprietario.indirizzo, proprietario.citta, proprietario.cap, proprietario.provincia].filter(Boolean).join(', ')} />
@@ -120,8 +120,8 @@ function DetailPanel({ unita, proprietario, conduttore, onClose }) {
 
           {/* Conduttore */}
           {conduttore && (
-            <Section icon={Shield} title="Conduttore">
-              <Row label="Nome" value={conduttore.descrizione} />
+            <Section icon={Shield} title="Conduttore" color="success">
+              <Row label="Nome" value={conduttore.descrizione} bold />
               <Row label="Codice Fiscale" value={conduttore.codice_fiscale} />
               <Row label="Indirizzo" value={[conduttore.indirizzo, conduttore.citta, conduttore.cap].filter(Boolean).join(', ')} />
               <Row label="Telefono" value={conduttore.telefono1} link={conduttore.telefono1 ? `tel:${conduttore.telefono1}` : null} />
@@ -135,26 +135,34 @@ function DetailPanel({ unita, proprietario, conduttore, onClose }) {
   )
 }
 
-function Section({ icon: Icon, title, children }) {
+const SECTION_COLORS = {
+  primary: { bg: 'bg-primary', text: 'text-white', icon: 'text-white', border: 'border-primary/20' },
+  accent: { bg: 'bg-accent', text: 'text-white', icon: 'text-white', border: 'border-accent/20' },
+  success: { bg: 'bg-success', text: 'text-white', icon: 'text-white', border: 'border-success/20' },
+}
+
+function Section({ icon: Icon, title, color = 'primary', children }) {
+  const c = SECTION_COLORS[color]
   return (
-    <div>
-      <h3 className="flex items-center gap-2 text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">
-        <Icon className="w-3.5 h-3.5" /> {title}
-      </h3>
-      <div className="bg-surface rounded-lg divide-y divide-border/30">{children}</div>
+    <div className={`rounded-xl border ${c.border} overflow-hidden`}>
+      <div className={`${c.bg} px-4 py-2.5 flex items-center gap-2`}>
+        <Icon className={`w-4 h-4 ${c.icon}`} />
+        <h3 className={`text-sm font-bold ${c.text} uppercase tracking-wide`}>{title}</h3>
+      </div>
+      <div className="divide-y divide-border/30 bg-white">{children}</div>
     </div>
   )
 }
 
-function Row({ label, value, link }) {
+function Row({ label, value, link, bold }) {
   if (!value) return null
   return (
-    <div className="flex justify-between items-start px-3 py-2 gap-3">
-      <span className="text-xs text-text-muted shrink-0">{label}</span>
+    <div className="flex justify-between items-start px-4 py-2.5 gap-4">
+      <span className="text-xs font-semibold text-text-secondary shrink-0 uppercase tracking-wide">{label}</span>
       {link ? (
-        <a href={link} className="text-xs text-primary font-medium text-right truncate hover:underline">{value}</a>
+        <a href={link} className="text-sm text-primary font-bold text-right truncate hover:underline">{value}</a>
       ) : (
-        <span className="text-xs text-text-primary font-medium text-right truncate">{value}</span>
+        <span className={`text-sm text-text-primary text-right truncate ${bold ? 'font-bold' : 'font-medium'}`}>{value}</span>
       )}
     </div>
   )
