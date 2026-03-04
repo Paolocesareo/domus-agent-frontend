@@ -1,8 +1,12 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import AppLayout from './components/AppLayout'
 import LoginPage from './pages/LoginPage'
 import SetupPage from './pages/SetupPage'
 import DashboardPage from './pages/DashboardPage'
+import CondominiPage from './pages/CondominiPage'
+import AttivitaPage from './pages/AttivitaPage'
+import ImpostazioniPage from './pages/ImpostazioniPage'
 
 function ProtectedRoute({ children }) {
   const { user, studio, loading } = useAuth()
@@ -17,7 +21,7 @@ function ProtectedRoute({ children }) {
 
   if (!user) return <Navigate to="/login" />
   if (!studio) return <Navigate to="/setup" />
-  return children
+  return <AppLayout>{children}</AppLayout>
 }
 
 function SetupRoute({ children }) {
@@ -58,6 +62,9 @@ function AppRoutes() {
       <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
       <Route path="/setup" element={<SetupRoute><SetupPage /></SetupRoute>} />
       <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+      <Route path="/condomini" element={<ProtectedRoute><CondominiPage /></ProtectedRoute>} />
+      <Route path="/attivita" element={<ProtectedRoute><AttivitaPage /></ProtectedRoute>} />
+      <Route path="/impostazioni" element={<ProtectedRoute><ImpostazioniPage /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" />} />
     </Routes>
   )

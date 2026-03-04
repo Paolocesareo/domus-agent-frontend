@@ -1,29 +1,21 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import { Link } from 'react-router-dom'
 import {
   Building2, Users, Home, UserCheck,
-  RefreshCw, LogOut, Clock, CheckCircle2, AlertTriangle,
-  Database, FileText
+  FileText, ArrowRight, CheckCircle2, Clock
 } from 'lucide-react'
 
-const STATUS_CONFIG = {
-  completed: { label: 'Sincronizzato', color: 'text-success', bg: 'bg-success/10', icon: CheckCircle2 },
-  running: { label: 'In corso...', color: 'text-accent', bg: 'bg-accent/10', icon: RefreshCw },
-  pending: { label: 'In attesa', color: 'text-text-muted', bg: 'bg-surface', icon: Clock },
-  queued: { label: 'In coda', color: 'text-warning', bg: 'bg-warning/10', icon: Clock },
-  error: { label: 'Errore', color: 'text-error', bg: 'bg-error/10', icon: AlertTriangle },
-}
-
-function StatCard({ icon: Icon, label, value, color = 'text-primary' }) {
+function StatCard({ icon: Icon, label, value, accent }) {
   return (
-    <div className="bg-surface-card rounded-xl p-4 shadow-sm border border-border/50">
+    <div className="bg-surface-card rounded-xl p-5 border border-border/50">
       <div className="flex items-center gap-3">
-        <div className={`w-10 h-10 rounded-lg ${color === 'text-primary' ? 'bg-primary/10' : 'bg-accent/10'} flex items-center justify-center`}>
-          <Icon className={`w-5 h-5 ${color}`} />
+        <div className={`w-11 h-11 rounded-xl ${accent ? 'bg-accent/10' : 'bg-primary/10'} flex items-center justify-center`}>
+          <Icon className={`w-5 h-5 ${accent ? 'text-accent' : 'text-primary'}`} />
         </div>
         <div>
-          <p className="text-2xl font-bold text-text-primary">{value}</p>
+          <p className="text-2xl font-bold text-text-primary tracking-tight">{value}</p>
           <p className="text-xs text-text-muted">{label}</p>
         </div>
       </div>
@@ -31,133 +23,14 @@ function StatCard({ icon: Icon, label, value, color = 'text-primary' }) {
   )
 }
 
-function ArchivioCard({ archivio, stats, onSync, syncing }) {
-  const status = STATUS_CONFIG[archivio.sync_status] || STATUS_CONFIG.pending
-  const StatusIcon = status.icon
-
-  return (
-    <div className="bg-surface-card rounded-xl p-5 shadow-sm border border-border/50 hover:border-primary/30 transition-all">
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <h3 className="font-semibold text-text-primary text-lg">{archivio.nome_archivio}</h3>
-          <div className={`inline-flex items-center gap-1.5 mt-1 px-2.5 py-1 rounded-full text-xs font-medium ${status.bg} ${status.color}`}>
-            <StatusIcon className={`w-3.5 h-3.5 ${archivio.sync_status === 'running' ? 'animate-spin' : ''}`} />
-            {status.label}
-          </div>
-        </div>
-        <div className="flex flex-col items-end gap-2">
-          {archivio.last_sync_at && (
-            <p className="text-xs text-text-muted">
-              {new Date(archivio.last_sync_at).toLocaleDateString('it-IT', {
-                day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
-              })}
-            </p>
-          )}
-          <button
-            onClick={() => onSync(archivio.id)}
-            disabled={syncing || archivio.sync_status === 'running' || archivio.sync_status === 'queued'}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-white hover:bg-primary-light transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
-            Sincronizza
-          </button>
-        </div>
-      </div>
-
-      {stats && (
-        <div className="grid grid-cols-3 gap-2">
-          <div className="bg-surface rounded-lg p-2.5 text-center">
-            <p className="text-lg font-bold text-text-primary">{stats.edifici || 0}</p>
-            <p className="text-xs text-text-muted">Edifici</p>
-          </div>
-          <div className="bg-surface rounded-lg p-2.5 text-center">
-            <p className="text-lg font-bold text-text-primary">{stats.unita || 0}</p>
-            <p className="text-xs text-text-muted">Unità</p>
-          </div>
-          <div className="bg-surface rounded-lg p-2.5 text-center">
-            <p className="text-lg font-bold text-text-primary">{stats.anagrafiche || 0}</p>
-            <p className="text-xs text-text-muted">Anagrafiche</p>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
 export default function DashboardPage() {
-  const { user, studio, signOut } = useAuth()
-  const [archivi, setArchivi] = useState([])
-  const [stats, setStats] = useState({})
+  const { studio } = useAuth()
   const [totals, setTotals] = useState({ edifici: 0, unita: 0, anagrafiche: 0, proprietari: 0, movimenti: 0 })
+  const [archivi, setArchivi] = useState([])
   const [loading, setLoading] = useState(true)
-  const [syncing, setSyncing] = useState(false)
-
-  async function triggerSync(archivioId) {
-    setSyncing(true)
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/trigger-sync`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ archivio_id: archivioId }),
-        }
-      )
-      if (response.ok) {
-        // Aggiorna lo stato localmente senza mostrare messaggi
-        setArchivi(prev => prev.map(a =>
-          a.id === archivioId ? { ...a, sync_status: 'queued' } : a
-        ))
-        // Poll per aggiornamenti ogni 5 secondi
-        startPolling()
-      }
-    } catch (err) {
-      console.error('Errore sync:', err)
-    } finally {
-      setSyncing(false)
-    }
-  }
-
-  // Polling per aggiornare stato sync
-  function startPolling() {
-    let attempts = 0
-    const maxAttempts = 60 // 5 minuti max
-    const interval = setInterval(async () => {
-      attempts++
-      if (attempts >= maxAttempts) {
-        clearInterval(interval)
-        return
-      }
-      try {
-        const { data: archiviData } = await supabase
-          .from('archivi')
-          .select('*')
-          .eq('studio_id', studio.studio_id)
-          .order('nome_archivio')
-
-        if (archiviData) {
-          setArchivi(archiviData)
-          // Se nessun archivio è più in queued/running, fermati e ricarica tutto
-          const stillRunning = archiviData.some(a => a.sync_status === 'queued' || a.sync_status === 'running')
-          if (!stillRunning) {
-            clearInterval(interval)
-            loadData()
-          }
-        }
-      } catch (_) {}
-    }, 5000)
-  }
 
   useEffect(() => {
-    if (studio) {
-      loadData()
-    } else {
-      setLoading(false)
-    }
+    if (studio) loadData()
   }, [studio])
 
   async function loadData() {
@@ -171,7 +44,6 @@ export default function DashboardPage() {
 
       setArchivi(archiviData || [])
 
-      const statsMap = {}
       let totEdifici = 0, totUnita = 0, totAnag = 0, totProp = 0, totMov = 0
 
       for (const arch of (archiviData || [])) {
@@ -183,14 +55,6 @@ export default function DashboardPage() {
           supabase.from('movimenti').select('id', { count: 'exact', head: true }).eq('archivio_id', arch.id),
         ])
 
-        statsMap[arch.id] = {
-          edifici: edifici.count || 0,
-          unita: unita.count || 0,
-          anagrafiche: anagrafiche.count || 0,
-          proprietari: proprietari.count || 0,
-          movimenti: movimenti.count || 0,
-        }
-
         totEdifici += edifici.count || 0
         totUnita += unita.count || 0
         totAnag += anagrafiche.count || 0
@@ -198,7 +62,6 @@ export default function DashboardPage() {
         totMov += movimenti.count || 0
       }
 
-      setStats(statsMap)
       setTotals({ edifici: totEdifici, unita: totUnita, anagrafiche: totAnag, proprietari: totProp, movimenti: totMov })
     } catch (err) {
       console.error('Errore caricamento dati:', err)
@@ -207,75 +70,83 @@ export default function DashboardPage() {
     }
   }
 
+  const lastSync = archivi.find(a => a.last_sync_at)
+  const allSynced = archivi.length > 0 && archivi.every(a => a.sync_status === 'completed')
+
   return (
-    <div className="min-h-screen bg-surface">
-      {/* Header */}
-      <header className="bg-primary shadow-lg">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="Domus Agent" className="w-10 h-10 rounded-xl" />
-            <div>
-              <h1 className="text-white font-bold text-lg tracking-tight">Domus Agent</h1>
-              <p className="text-white/60 text-xs">{studio?.nome || 'Dashboard'}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={loadData}
-              className="p-2.5 rounded-xl bg-white/10 text-white/80 hover:bg-white/20 hover:text-white transition-all"
-              title="Aggiorna dati"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
-            <button
-              onClick={signOut}
-              className="p-2.5 rounded-xl bg-white/10 text-white/80 hover:bg-white/20 hover:text-white transition-all"
-              title="Esci"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
+    <div className="p-6 lg:p-8 max-w-6xl">
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-text-primary">Dashboard</h1>
+        <p className="text-text-secondary text-sm mt-1">Panoramica dei dati del tuo studio</p>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <div className="w-8 h-8 border-3 border-primary/20 border-t-primary rounded-full animate-spin" />
         </div>
-      </header>
+      ) : (
+        <>
+          {lastSync && (
+            <div className={`flex items-center gap-2 mb-6 px-4 py-2.5 rounded-xl text-sm ${
+              allSynced ? 'bg-success/8 text-success' : 'bg-warning/8 text-warning'
+            }`}>
+              {allSynced ? <CheckCircle2 className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
+              <span>
+                {allSynced ? 'Dati aggiornati' : 'Sincronizzazione in corso'}
+                {lastSync?.last_sync_at && (
+                  <span className="text-text-muted ml-1">
+                    · ultimo aggiornamento {new Date(lastSync.last_sync_at).toLocaleDateString('it-IT', {
+                      day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+                    })}
+                  </span>
+                )}
+              </span>
+            </div>
+          )}
 
-      <main className="max-w-6xl mx-auto px-4 py-8">
-        {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="w-8 h-8 border-3 border-primary/20 border-t-primary rounded-full animate-spin" />
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-8">
+            <StatCard icon={Building2} label="Edifici" value={totals.edifici} />
+            <StatCard icon={Home} label="Unità" value={totals.unita} />
+            <StatCard icon={Users} label="Anagrafiche" value={totals.anagrafiche} accent />
+            <StatCard icon={UserCheck} label="Proprietari" value={totals.proprietari} />
+            <StatCard icon={FileText} label="Movimenti" value={totals.movimenti.toLocaleString('it-IT')} accent />
           </div>
-        ) : (
-          <>
-            {/* Stats globali */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-8">
-              <StatCard icon={Building2} label="Edifici" value={totals.edifici} />
-              <StatCard icon={Home} label="Unità" value={totals.unita} />
-              <StatCard icon={Users} label="Anagrafiche" value={totals.anagrafiche} color="text-accent" />
-              <StatCard icon={UserCheck} label="Proprietari" value={totals.proprietari} />
-              <StatCard icon={FileText} label="Movimenti" value={totals.movimenti.toLocaleString('it-IT')} color="text-accent" />
-            </div>
 
-            {/* Archivi */}
-            <div className="mb-6">
-              <h2 className="text-lg font-semibold text-text-primary mb-4">
-                I tuoi archivi
-              </h2>
-              {archivi.length === 0 ? (
-                <div className="bg-surface-card rounded-xl p-8 text-center border border-border/50">
-                  <Database className="w-10 h-10 text-text-muted mx-auto mb-3" />
-                  <p className="text-text-secondary">Nessun archivio configurato</p>
-                  <p className="text-text-muted text-sm mt-1">La prima sincronizzazione è in corso...</p>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Link
+              to="/condomini"
+              className="bg-surface-card rounded-xl p-5 border border-border/50 hover:border-primary/30 hover:shadow-md transition-all group flex items-center justify-between"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <Building2 className="w-5 h-5 text-primary" />
                 </div>
-              ) : (
-                <div className="grid sm:grid-cols-2 gap-4">
-                  {archivi.map((arch) => (
-                    <ArchivioCard key={arch.id} archivio={arch} stats={stats[arch.id]} onSync={triggerSync} syncing={syncing} />
-                  ))}
+                <div>
+                  <p className="font-semibold text-text-primary text-sm">Condomini</p>
+                  <p className="text-text-muted text-xs">{totals.edifici} edifici gestiti</p>
                 </div>
-              )}
-            </div>
-          </>
-        )}
-      </main>
+              </div>
+              <ArrowRight className="w-4 h-4 text-text-muted group-hover:text-primary transition-colors" />
+            </Link>
+
+            <Link
+              to="/impostazioni"
+              className="bg-surface-card rounded-xl p-5 border border-border/50 hover:border-primary/30 hover:shadow-md transition-all group flex items-center justify-between"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center">
+                  <FileText className="w-5 h-5 text-accent" />
+                </div>
+                <div>
+                  <p className="font-semibold text-text-primary text-sm">Impostazioni</p>
+                  <p className="text-text-muted text-xs">Sincronizzazione e configurazione</p>
+                </div>
+              </div>
+              <ArrowRight className="w-4 h-4 text-text-muted group-hover:text-primary transition-colors" />
+            </Link>
+          </div>
+        </>
+      )}
     </div>
   )
 }
