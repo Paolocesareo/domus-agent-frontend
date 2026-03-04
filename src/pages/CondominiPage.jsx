@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
-import { Building2, MapPin, Home, Users, ArrowLeft, User, Phone, Mail } from 'lucide-react'
+import {
+  Building2, MapPin, Home, Users, ArrowLeft, X,
+  Phone, Mail, Shield, User, FileText, MapPinned
+} from 'lucide-react'
 
+/* ─── Lista condomini ─── */
 function CondominiList({ edifici, onSelect }) {
   return (
     <>
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-2xl font-bold text-text-primary">Condomini</h1>
         <p className="text-text-secondary text-sm mt-1">Tutti i condomini gestiti dal tuo studio</p>
       </div>
@@ -59,51 +63,163 @@ function CondominiList({ edifici, onSelect }) {
   )
 }
 
-function CondominiDettaglio({ edificio, onBack }) {
-  const [unita, setUnita] = useState([])
-  const [loading, setLoading] = useState(true)
+/* ─── Pannello laterale dettaglio condomino ─── */
+function DetailPanel({ unita, proprietario, conduttore, onClose }) {
+  if (!unita) return null
 
-  useEffect(() => {
-    loadDettaglio()
-  }, [edificio])
+  const nome = proprietario?.descrizione || 'N/D'
+
+  return (
+    <>
+      {/* Overlay */}
+      <div className="fixed inset-0 bg-black/20 z-40" onClick={onClose} />
+
+      {/* Panel */}
+      <div className="fixed top-0 right-0 h-full w-full max-w-md bg-surface-card shadow-2xl z-50 overflow-y-auto animate-slide-in">
+        {/* Header */}
+        <div className="sticky top-0 bg-primary px-5 py-4 flex items-center justify-between z-10">
+          <div className="text-white min-w-0">
+            <h2 className="font-bold text-base truncate">{nome}</h2>
+            <p className="text-white/60 text-xs mt-0.5">
+              Sub. {unita.subalterno || '-'} · Int. {unita.interno || '-'} · Piano {unita.piano || '-'}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-white/60 hover:text-white p-1">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-5">
+          {/* Unità */}
+          <Section icon={Home} title="Unità">
+            <Row label="Subalterno" value={unita.subalterno} />
+            <Row label="Interno" value={unita.interno} />
+            <Row label="Piano" value={unita.piano} />
+            <Row label="Scala" value={unita.scala} />
+            <Row label="Tipo" value={unita.tipo} />
+            {unita.millesimi_proprieta && <Row label="Millesimi" value={unita.millesimi_proprieta} />}
+            {unita.note && <Row label="Note" value={unita.note} />}
+          </Section>
+
+          {/* Proprietario */}
+          {proprietario && (
+            <Section icon={User} title="Proprietario">
+              <Row label="Nome" value={proprietario.descrizione} />
+              <Row label="Codice Fiscale" value={proprietario.codice_fiscale} />
+              <Row label="P. IVA" value={proprietario.partita_iva} />
+              <Row label="Indirizzo" value={[proprietario.indirizzo, proprietario.citta, proprietario.cap, proprietario.provincia].filter(Boolean).join(', ')} />
+              <Row label="Telefono" value={proprietario.telefono1} link={proprietario.telefono1 ? `tel:${proprietario.telefono1}` : null} />
+              <Row label="Telefono 2" value={proprietario.telefono2} link={proprietario.telefono2 ? `tel:${proprietario.telefono2}` : null} />
+              <Row label="Telefono 3" value={proprietario.telefono3} link={proprietario.telefono3 ? `tel:${proprietario.telefono3}` : null} />
+              <Row label="Email" value={proprietario.email} link={proprietario.email ? `mailto:${proprietario.email}` : null} />
+              <Row label="PEC" value={proprietario.pec} link={proprietario.pec ? `mailto:${proprietario.pec}` : null} />
+              {proprietario.note && <Row label="Note" value={proprietario.note} />}
+            </Section>
+          )}
+
+          {/* Conduttore */}
+          {conduttore && (
+            <Section icon={Shield} title="Conduttore">
+              <Row label="Nome" value={conduttore.descrizione} />
+              <Row label="Codice Fiscale" value={conduttore.codice_fiscale} />
+              <Row label="Indirizzo" value={[conduttore.indirizzo, conduttore.citta, conduttore.cap].filter(Boolean).join(', ')} />
+              <Row label="Telefono" value={conduttore.telefono1} link={conduttore.telefono1 ? `tel:${conduttore.telefono1}` : null} />
+              <Row label="Email" value={conduttore.email} link={conduttore.email ? `mailto:${conduttore.email}` : null} />
+              <Row label="PEC" value={conduttore.pec} link={conduttore.pec ? `mailto:${conduttore.pec}` : null} />
+            </Section>
+          )}
+        </div>
+      </div>
+    </>
+  )
+}
+
+function Section({ icon: Icon, title, children }) {
+  return (
+    <div>
+      <h3 className="flex items-center gap-2 text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">
+        <Icon className="w-3.5 h-3.5" /> {title}
+      </h3>
+      <div className="bg-surface rounded-lg divide-y divide-border/30">{children}</div>
+    </div>
+  )
+}
+
+function Row({ label, value, link }) {
+  if (!value) return null
+  return (
+    <div className="flex justify-between items-start px-3 py-2 gap-3">
+      <span className="text-xs text-text-muted shrink-0">{label}</span>
+      {link ? (
+        <a href={link} className="text-xs text-primary font-medium text-right truncate hover:underline">{value}</a>
+      ) : (
+        <span className="text-xs text-text-primary font-medium text-right truncate">{value}</span>
+      )}
+    </div>
+  )
+}
+
+/* ─── Dettaglio edificio: tabella stile Danea ─── */
+function CondominiDettaglio({ edificio, onBack }) {
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [selected, setSelected] = useState(null)
+
+  useEffect(() => { loadDettaglio() }, [edificio])
 
   async function loadDettaglio() {
     setLoading(true)
     try {
-      // Prendi unità di questo edificio
+      // Prendi tutte le unità
       const { data: unitaData } = await supabase
         .from('unita')
         .select('*')
         .eq('archivio_id', edificio.archivio_id)
         .eq('edificio_domustudio_id', edificio.domustudio_id)
-        .order('interno')
+        .order('subalterno')
 
-      // Per ogni unità prendi il proprietario
-      const unitaConProprietari = await Promise.all(
-        (unitaData || []).map(async (u) => {
-          const { data: propData } = await supabase
-            .from('proprietari')
-            .select('anagrafica_domustudio_id')
-            .eq('archivio_id', u.archivio_id)
-            .eq('unita_domustudio_id', u.domustudio_id)
-            .limit(1)
+      // Prendi tutti i proprietari per queste unità
+      const unitaIds = (unitaData || []).map(u => u.domustudio_id)
+      const { data: propData } = await supabase
+        .from('proprietari')
+        .select('*')
+        .eq('archivio_id', edificio.archivio_id)
+        .in('unita_domustudio_id', unitaIds)
 
-          let proprietario = null
-          if (propData?.length > 0) {
-            const { data: anagData } = await supabase
-              .from('anagrafiche')
-              .select('*')
-              .eq('archivio_id', u.archivio_id)
-              .eq('domustudio_id', propData[0].anagrafica_domustudio_id)
-              .limit(1)
-            proprietario = anagData?.[0] || null
-          }
+      // Prendi tutti i conduttori
+      const { data: condData } = await supabase
+        .from('conduttori')
+        .select('*')
+        .eq('archivio_id', edificio.archivio_id)
+        .in('unita_domustudio_id', unitaIds)
 
-          return { ...u, proprietario }
-        })
-      )
+      // Raccogli tutti gli ID anagrafica
+      const anagIds = new Set()
+      for (const p of (propData || [])) anagIds.add(p.anagrafica_domustudio_id)
+      for (const c of (condData || [])) anagIds.add(c.anagrafica_domustudio_id)
 
-      setUnita(unitaConProprietari)
+      const { data: anagData } = await supabase
+        .from('anagrafiche')
+        .select('*')
+        .eq('archivio_id', edificio.archivio_id)
+        .in('domustudio_id', [...anagIds])
+
+      const anagMap = {}
+      for (const a of (anagData || [])) anagMap[a.domustudio_id] = a
+
+      const propMap = {}
+      for (const p of (propData || [])) propMap[p.unita_domustudio_id] = anagMap[p.anagrafica_domustudio_id] || null
+
+      const condMap = {}
+      for (const c of (condData || [])) condMap[c.unita_domustudio_id] = anagMap[c.anagrafica_domustudio_id] || null
+
+      const merged = (unitaData || []).map(u => ({
+        unita: u,
+        proprietario: propMap[u.domustudio_id] || null,
+        conduttore: condMap[u.domustudio_id] || null,
+      }))
+
+      setRows(merged)
     } catch (err) {
       console.error('Errore dettaglio:', err)
     } finally {
@@ -114,7 +230,7 @@ function CondominiDettaglio({ edificio, onBack }) {
   return (
     <>
       {/* Header */}
-      <div className="mb-6">
+      <div className="mb-5">
         <button
           onClick={onBack}
           className="flex items-center gap-1.5 text-sm text-text-muted hover:text-primary transition-colors mb-3"
@@ -122,102 +238,100 @@ function CondominiDettaglio({ edificio, onBack }) {
           <ArrowLeft className="w-4 h-4" />
           Tutti i condomini
         </button>
-        <div className="flex items-start gap-3">
-          <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-            <Building2 className="w-6 h-6 text-primary" />
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+            <Building2 className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-text-primary">{edificio.intestazione}</h1>
+            <h1 className="text-xl font-bold text-text-primary">{edificio.intestazione}</h1>
             {edificio.indirizzo && (
-              <p className="text-text-secondary text-sm mt-0.5 flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5" />
-                {edificio.indirizzo}{edificio.citta ? `, ${edificio.citta}` : ''}
-                {edificio.cap ? ` ${edificio.cap}` : ''}
+              <p className="text-text-muted text-xs mt-0.5">
+                {edificio.indirizzo}{edificio.citta ? `, ${edificio.citta}` : ''}{edificio.cap ? ` ${edificio.cap}` : ''}
               </p>
-            )}
-            {edificio.codice_fiscale && (
-              <p className="text-text-muted text-xs mt-1">CF: {edificio.codice_fiscale}</p>
             )}
           </div>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="flex gap-4 mb-6">
-        <div className="bg-surface-card rounded-xl px-5 py-3 border border-border/50">
-          <span className="text-lg font-bold text-text-primary">{unita.length}</span>
-          <span className="text-xs text-text-muted ml-1.5">unità</span>
-        </div>
-        <div className="bg-surface-card rounded-xl px-5 py-3 border border-border/50">
-          <span className="text-lg font-bold text-text-primary">{unita.filter(u => u.proprietario).length}</span>
-          <span className="text-xs text-text-muted ml-1.5">condomini</span>
-        </div>
+      {/* Stats compatte */}
+      <div className="flex gap-3 mb-4">
+        <span className="text-xs font-medium text-text-muted bg-surface-card border border-border/50 rounded-lg px-3 py-1.5">
+          {rows.length} unità
+        </span>
+        <span className="text-xs font-medium text-text-muted bg-surface-card border border-border/50 rounded-lg px-3 py-1.5">
+          {rows.filter(r => r.proprietario).length} proprietari
+        </span>
+        <span className="text-xs font-medium text-text-muted bg-surface-card border border-border/50 rounded-lg px-3 py-1.5">
+          {rows.filter(r => r.conduttore).length} conduttori
+        </span>
       </div>
-
-      {/* Lista condomini */}
-      <h2 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-3">
-        Condomini
-      </h2>
 
       {loading ? (
         <div className="flex items-center justify-center py-12">
           <div className="w-6 h-6 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
         </div>
       ) : (
+        /* ─── Tabella stile Danea ─── */
         <div className="bg-surface-card rounded-xl border border-border/50 overflow-hidden">
-          {unita.length === 0 ? (
-            <p className="text-text-muted text-sm p-6 text-center">Nessuna unità trovata</p>
-          ) : (
-            <div className="divide-y divide-border/30">
-              {unita.map((u) => (
-                <div key={u.id} className="flex items-center justify-between p-4 hover:bg-surface/50 transition-colors">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-lg bg-surface flex items-center justify-center shrink-0">
-                      <User className="w-4 h-4 text-text-muted" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-text-primary truncate">
-                        {u.proprietario?.descrizione || 'Proprietario non trovato'}
-                      </p>
-                      <div className="flex items-center gap-3 mt-0.5">
-                        {u.interno && (
-                          <span className="text-xs text-text-muted">Int. {u.interno}</span>
-                        )}
-                        {u.piano && (
-                          <span className="text-xs text-text-muted">Piano {u.piano}</span>
-                        )}
-                        {u.tipo && (
-                          <span className="text-xs text-text-muted">{u.tipo}</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0 ml-3">
-                    {u.proprietario?.telefono1 && (
-                      <a href={`tel:${u.proprietario.telefono1}`} className="text-text-muted hover:text-primary transition-colors" title={u.proprietario.telefono1}>
-                        <Phone className="w-4 h-4" />
-                      </a>
-                    )}
-                    {u.proprietario?.email && (
-                      <a href={`mailto:${u.proprietario.email}`} className="text-text-muted hover:text-primary transition-colors" title={u.proprietario.email}>
-                        <Mail className="w-4 h-4" />
-                      </a>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-primary/5 border-b border-border/50">
+                  <th className="text-left px-3 py-2.5 font-semibold text-text-secondary whitespace-nowrap">Sub.</th>
+                  <th className="text-left px-3 py-2.5 font-semibold text-text-secondary whitespace-nowrap">Tipo</th>
+                  <th className="text-left px-3 py-2.5 font-semibold text-text-secondary whitespace-nowrap">Int.</th>
+                  <th className="text-left px-3 py-2.5 font-semibold text-text-secondary whitespace-nowrap">Piano</th>
+                  <th className="text-left px-3 py-2.5 font-semibold text-text-secondary whitespace-nowrap">Scala</th>
+                  <th className="text-left px-3 py-2.5 font-semibold text-text-secondary whitespace-nowrap min-w-[200px]">Proprietario</th>
+                  <th className="text-left px-3 py-2.5 font-semibold text-text-secondary whitespace-nowrap min-w-[200px]">Conduttore</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/20">
+                {rows.map((row, i) => (
+                  <tr
+                    key={row.unita.id}
+                    onClick={() => setSelected(row)}
+                    className={`cursor-pointer transition-colors ${
+                      i % 2 === 0 ? 'bg-white' : 'bg-surface/40'
+                    } hover:bg-primary/5`}
+                  >
+                    <td className="px-3 py-2 text-text-primary font-medium whitespace-nowrap">{row.unita.subalterno || '-'}</td>
+                    <td className="px-3 py-2 text-text-secondary whitespace-nowrap">{row.unita.tipo || '-'}</td>
+                    <td className="px-3 py-2 text-text-primary whitespace-nowrap">{row.unita.interno || '-'}</td>
+                    <td className="px-3 py-2 text-text-secondary whitespace-nowrap">{row.unita.piano || '-'}</td>
+                    <td className="px-3 py-2 text-text-secondary whitespace-nowrap">{row.unita.scala || '-'}</td>
+                    <td className="px-3 py-2 text-text-primary font-medium truncate max-w-[250px]">
+                      {row.proprietario?.descrizione || '-'}
+                    </td>
+                    <td className="px-3 py-2 text-text-secondary truncate max-w-[200px]">
+                      {row.conduttore?.descrizione || ''}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
+      )}
+
+      {/* Pannello laterale */}
+      {selected && (
+        <DetailPanel
+          unita={selected.unita}
+          proprietario={selected.proprietario}
+          conduttore={selected.conduttore}
+          onClose={() => setSelected(null)}
+        />
       )}
     </>
   )
 }
 
+/* ─── Page ─── */
 export default function CondominiPage() {
   const { studio } = useAuth()
   const [edifici, setEdifici] = useState([])
-  const [selected, setSelected] = useState(null)
+  const [selectedEdificio, setSelectedEdificio] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -240,19 +354,18 @@ export default function CondominiPage() {
         .in('archivio_id', archivioIds)
         .order('intestazione')
 
-      const edificiConConteggi = await Promise.all(
+      const enriched = await Promise.all(
         (data || []).map(async (ed) => {
-          const [unitaRes, propRes] = await Promise.all([
+          const [uRes, pRes] = await Promise.all([
             supabase.from('unita').select('id', { count: 'exact', head: true })
               .eq('archivio_id', ed.archivio_id).eq('edificio_domustudio_id', ed.domustudio_id),
             supabase.from('proprietari').select('id', { count: 'exact', head: true })
               .eq('archivio_id', ed.archivio_id),
           ])
-          return { ...ed, unita_count: unitaRes.count || 0, proprietari_count: propRes.count || 0 }
+          return { ...ed, unita_count: uRes.count || 0, proprietari_count: pRes.count || 0 }
         })
       )
-
-      setEdifici(edificiConConteggi)
+      setEdifici(enriched)
     } catch (err) {
       console.error('Errore:', err)
     } finally {
@@ -269,11 +382,11 @@ export default function CondominiPage() {
   }
 
   return (
-    <div className="p-6 lg:p-8 max-w-6xl">
-      {selected ? (
-        <CondominiDettaglio edificio={selected} onBack={() => setSelected(null)} />
+    <div className="p-6 lg:p-8 max-w-[1200px]">
+      {selectedEdificio ? (
+        <CondominiDettaglio edificio={selectedEdificio} onBack={() => setSelectedEdificio(null)} />
       ) : (
-        <CondominiList edifici={edifici} onSelect={setSelected} />
+        <CondominiList edifici={edifici} onSelect={setSelectedEdificio} />
       )}
     </div>
   )
