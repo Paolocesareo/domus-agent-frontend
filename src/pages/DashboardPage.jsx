@@ -31,7 +31,7 @@ function StatCard({ icon: Icon, label, value, color = 'text-primary' }) {
   )
 }
 
-function ArchivioCard({ archivio, stats }) {
+function ArchivioCard({ archivio, stats, onSync, syncing }) {
   const status = STATUS_CONFIG[archivio.sync_status] || STATUS_CONFIG.pending
   const StatusIcon = status.icon
 
@@ -45,13 +45,23 @@ function ArchivioCard({ archivio, stats }) {
             {status.label}
           </div>
         </div>
-        {archivio.last_sync_at && (
-          <p className="text-xs text-text-muted">
-            {new Date(archivio.last_sync_at).toLocaleDateString('it-IT', {
-              day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
-            })}
-          </p>
-        )}
+        <div className="flex flex-col items-end gap-2">
+          {archivio.last_sync_at && (
+            <p className="text-xs text-text-muted">
+              {new Date(archivio.last_sync_at).toLocaleDateString('it-IT', {
+                day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+              })}
+            </p>
+          )}
+          <button
+            onClick={() => onSync(archivio.id)}
+            disabled={syncing || archivio.sync_status === 'running' || archivio.sync_status === 'queued'}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-white hover:bg-primary-light transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+            Sincronizza
+          </button>
+        </div>
       </div>
 
       {stats && (
@@ -80,6 +90,40 @@ export default function DashboardPage() {
   const [stats, setStats] = useState({})
   const [totals, setTotals] = useState({ edifici: 0, unita: 0, anagrafiche: 0, proprietari: 0, movimenti: 0 })
   const [loading, setLoading] = useState(true)
+  const [syncing, setSyncing] = useState(false)
+  const [syncMessage, setSyncMessage] = useState('')
+
+  async function triggerSync(archivioId) {
+    setSyncing(true)
+    setSyncMessage('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/trigger-sync`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ archivio_id: archivioId }),
+        }
+      )
+      const result = await response.json()
+      if (response.ok) {
+        setSyncMessage('Sincronizzazione avviata!')
+        // Ricarica dati dopo 2 secondi
+        setTimeout(() => loadData(), 2000)
+      } else {
+        setSyncMessage(`Errore: ${result.error || 'Sconosciuto'}`)
+      }
+    } catch (err) {
+      console.error('Errore sync:', err)
+      setSyncMessage('Errore di connessione')
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   useEffect(() => {
     if (studio) {
@@ -142,9 +186,7 @@ export default function DashboardPage() {
       <header className="bg-primary shadow-lg">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
-              <Building2 className="w-5 h-5 text-white" />
-            </div>
+            <img src="/logo.png" alt="Domus Agent" className="w-10 h-10 rounded-xl" />
             <div>
               <h1 className="text-white font-bold text-lg tracking-tight">Domus Agent</h1>
               <p className="text-white/60 text-xs">{studio?.nome || 'Dashboard'}</p>
@@ -199,8 +241,13 @@ export default function DashboardPage() {
               ) : (
                 <div className="grid sm:grid-cols-2 gap-4">
                   {archivi.map((arch) => (
-                    <ArchivioCard key={arch.id} archivio={arch} stats={stats[arch.id]} />
+                    <ArchivioCard key={arch.id} archivio={arch} stats={stats[arch.id]} onSync={triggerSync} syncing={syncing} />
                   ))}
+                </div>
+              )}
+              {syncMessage && (
+                <div className={`mt-4 px-4 py-3 rounded-xl text-sm ${syncMessage.startsWith('Errore') ? 'bg-error/10 text-error' : 'bg-success/10 text-success'}`}>
+                  {syncMessage}
                 </div>
               )}
             </div>
