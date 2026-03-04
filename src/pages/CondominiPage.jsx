@@ -87,6 +87,7 @@ function DetailPanel({ unita, proprietario, conduttore, edificio, onClose }) {
   async function loadRate() {
     setLoadingRate(true)
     try {
+      // 1. Rate dovute (rate_importi)
       const { data } = await supabase
         .from('rate_importi')
         .select('importo, rata_domustudio_id')
@@ -106,11 +107,33 @@ function DetailPanel({ unita, proprietario, conduttore, edificio, onClose }) {
         const rataMap = {}
         for (const r of (rateData || [])) rataMap[r.domustudio_id] = r
 
-        const merged = data.map(d => ({
-          importo: parseFloat(d.importo) || 0,
-          data_rata: rataMap[d.rata_domustudio_id]?.data_rata || '',
-          descrizione: rataMap[d.rata_domustudio_id]?.descrizione || '',
-        })).sort((a, b) => (a.data_rata || '').localeCompare(b.data_rata || ''))
+        // 2. Ricevute pagamento per questa unita
+        const { data: ricevuteData } = await supabase
+          .from('ricevute_rate_unita')
+          .select('importo, descrizione_rata')
+          .eq('archivio_id', unita.archivio_id)
+          .eq('unita_domustudio_id', unita.domustudio_id)
+
+        // Mappa ricevute: somma importi per descrizione rata
+        const ricevuteMap = {}
+        for (const ric of (ricevuteData || [])) {
+          const key = (ric.descrizione_rata || '').trim().toLowerCase()
+          ricevuteMap[key] = (ricevuteMap[key] || 0) + (parseFloat(ric.importo) || 0)
+        }
+
+        const merged = data.map(d => {
+          const desc = rataMap[d.rata_domustudio_id]?.descrizione || ''
+          const importo = parseFloat(d.importo) || 0
+          const key = desc.trim().toLowerCase()
+          // Controlla se esiste ricevuta per questa rata
+          const pagato = (ricevuteMap[key] || 0) >= importo * 0.95 // tolleranza 5% per arrotondamenti
+          return {
+            importo,
+            data_rata: rataMap[d.rata_domustudio_id]?.data_rata || '',
+            descrizione: desc,
+            pagato,
+          }
+        }).sort((a, b) => (a.data_rata || '').localeCompare(b.data_rata || ''))
 
         setRateDetail(merged)
       }
@@ -122,7 +145,8 @@ function DetailPanel({ unita, proprietario, conduttore, edificio, onClose }) {
   }
 
   const totaleDovuto = rateDetail.reduce((s, r) => s + r.importo, 0)
-  const totaleScaduto = rateDetail.filter(r => r.data_rata && new Date(r.data_rata) < new Date()).reduce((s, r) => s + r.importo, 0)
+  const totalePagato = rateDetail.filter(r => r.pagato).reduce((s, r) => s + r.importo, 0)
+  const totaleScaduto = rateDetail.filter(r => !r.pagato && r.data_rata && new Date(r.data_rata) < new Date()).reduce((s, r) => s + r.importo, 0)
   const edificioNome = edificio?.intestazione || ''
 
   function fmtDate(d) {
@@ -134,7 +158,7 @@ function DetailPanel({ unita, proprietario, conduttore, edificio, onClose }) {
   }
 
   function buildSollecitoMsg() {
-    const scadute = rateDetail.filter(r => r.data_rata && new Date(r.data_rata) < new Date())
+    const scadute = rateDetail.filter(r => !r.pagato && r.data_rata && new Date(r.data_rata) < new Date())
     const tot = scadute.reduce((s, r) => s + r.importo, 0)
     return `Gentile ${nome},\n\nle comunichiamo che risultano rate condominiali non ancora saldate per il ${edificioNome}.\n\nImporto totale dovuto: ${fmtEur(tot)}\n\nLa preghiamo di provvedere al pagamento quanto prima.\n\nCordiali saluti,\nAmministrazione Condominiale`
   }
@@ -142,9 +166,11 @@ function DetailPanel({ unita, proprietario, conduttore, edificio, onClose }) {
   function buildEstrattoMsg() {
     let msg = `Gentile ${nome},\n\ndi seguito il riepilogo delle rate condominiali per il ${edificioNome}:\n\n`
     for (const r of rateDetail) {
-      msg += `${fmtDate(r.data_rata)} - ${r.descrizione}: ${fmtEur(r.importo)}\n`
+      const stato = r.pagato ? ' ✓ PAGATO' : ''
+      msg += `${fmtDate(r.data_rata)} - ${r.descrizione}: ${fmtEur(r.importo)}${stato}\n`
     }
-    msg += `\nTOTALE: ${fmtEur(totaleDovuto)}\n\nCordiali saluti,\nAmministrazione Condominiale`
+    const nonPagato = rateDetail.filter(r => !r.pagato).reduce((s, r) => s + r.importo, 0)
+    msg += `\nTOTALE DOVUTO: ${fmtEur(nonPagato)}\n\nCordiali saluti,\nAmministrazione Condominiale`
     return msg
   }
 
@@ -254,19 +280,28 @@ function DetailPanel({ unita, proprietario, conduttore, edificio, onClose }) {
                 ) : (
                   <div className="divide-y divide-border/20">
                     {rateDetail.map((r, i) => {
-                      const scaduta = r.data_rata && new Date(r.data_rata) < new Date()
+                      const scaduta = !r.pagato && r.data_rata && new Date(r.data_rata) < new Date()
                       return (
-                        <div key={i} className={`flex items-center justify-between px-4 py-2.5 ${scaduta ? 'bg-red-50' : ''}`}>
-                          <div>
-                            <p className={`text-sm font-medium ${scaduta ? 'text-red-700' : 'text-text-primary'}`}>{r.descrizione}</p>
-                            <p className="text-xs text-text-muted">{fmtDate(r.data_rata)}</p>
+                        <div key={i} className={`flex items-center justify-between px-4 py-2.5 ${r.pagato ? 'bg-green-50' : scaduta ? 'bg-red-50' : ''}`}>
+                          <div className="flex items-center gap-2 min-w-0">
+                            {r.pagato && <span className="text-green-600 text-xs font-bold shrink-0">✓</span>}
+                            <div className="min-w-0">
+                              <p className={`text-sm font-medium ${r.pagato ? 'text-green-700' : scaduta ? 'text-red-700' : 'text-text-primary'}`}>{r.descrizione}</p>
+                              <p className="text-xs text-text-muted">{fmtDate(r.data_rata)}</p>
+                            </div>
                           </div>
-                          <span className={`text-sm font-bold ${scaduta ? 'text-red-700' : 'text-text-primary'}`}>
-                            {fmtEur(r.importo)}
+                          <span className={`text-sm font-bold shrink-0 ${r.pagato ? 'text-green-700' : scaduta ? 'text-red-700' : 'text-text-primary'}`}>
+                            {r.pagato ? '—' : fmtEur(r.importo)}
                           </span>
                         </div>
                       )
                     })}
+                    {totalePagato > 0 && (
+                      <div className="flex items-center justify-between px-4 py-2.5 bg-green-600">
+                        <span className="text-sm font-bold text-white uppercase">Pagato</span>
+                        <span className="text-base font-bold text-white">{fmtEur(totalePagato)}</span>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between px-4 py-3 bg-red-600">
                       <span className="text-sm font-bold text-white uppercase">Da pagare ad oggi</span>
                       <span className="text-base font-bold text-white">{fmtEur(totaleScaduto)}</span>
