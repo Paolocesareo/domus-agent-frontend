@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import {
   Building2, MapPin, Home, Users, ArrowLeft, X,
   Phone, Mail, Shield, User, FileText, MapPinned,
-  Search, ChevronUp, ChevronDown
+  Search, ChevronUp, ChevronDown, MessageCircle, Wallet, Send
 } from 'lucide-react'
 
 /* ─── Lista condomini ─── */
@@ -65,19 +65,97 @@ function CondominiList({ edifici, onSelect }) {
 }
 
 /* ─── Pannello laterale dettaglio condomino ─── */
-function DetailPanel({ unita, proprietario, conduttore, onClose }) {
+/* ─── Pannello laterale dettaglio condomino ─── */
+function DetailPanel({ unita, proprietario, conduttore, edificio, onClose }) {
+  const [rateDetail, setRateDetail] = useState([])
+  const [loadingRate, setLoadingRate] = useState(true)
+  const [whatsappMode, setWhatsappMode] = useState(null)
+  const [customMsg, setCustomMsg] = useState('')
+
   if (!unita) return null
 
   const nome = proprietario?.descrizione || 'N/D'
+  const rawPhone = proprietario?.telefono1 || proprietario?.telefono2 || proprietario?.telefono3 || ''
+  const cleanPhone = rawPhone.replace(/[\s\-\.]/g, '').replace(/^0/, '+390').replace(/^3/, '+393')
+
+  useEffect(() => {
+    if (proprietario) loadRate()
+    else setLoadingRate(false)
+  }, [proprietario])
+
+  async function loadRate() {
+    setLoadingRate(true)
+    try {
+      const { data } = await supabase
+        .from('rate_importi')
+        .select('importo, rata_domustudio_id')
+        .eq('archivio_id', unita.archivio_id)
+        .eq('unita_domustudio_id', unita.domustudio_id)
+        .eq('anagrafica_domustudio_id', proprietario.domustudio_id)
+
+      if (data?.length) {
+        const rataIds = [...new Set(data.map(d => d.rata_domustudio_id))]
+        const { data: rateData } = await supabase
+          .from('rate')
+          .select('domustudio_id, data_rata, descrizione')
+          .eq('archivio_id', unita.archivio_id)
+          .in('domustudio_id', rataIds)
+          .order('data_rata')
+
+        const rataMap = {}
+        for (const r of (rateData || [])) rataMap[r.domustudio_id] = r
+
+        const merged = data.map(d => ({
+          importo: parseFloat(d.importo) || 0,
+          data_rata: rataMap[d.rata_domustudio_id]?.data_rata || '',
+          descrizione: rataMap[d.rata_domustudio_id]?.descrizione || '',
+        })).sort((a, b) => (a.data_rata || '').localeCompare(b.data_rata || ''))
+
+        setRateDetail(merged)
+      }
+    } catch (err) {
+      console.error('Errore rate:', err)
+    } finally {
+      setLoadingRate(false)
+    }
+  }
+
+  const totaleDovuto = rateDetail.reduce((s, r) => s + r.importo, 0)
+  const edificioNome = edificio?.intestazione || ''
+
+  function fmtDate(d) {
+    if (!d) return '-'
+    return new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  }
+  function fmtEur(v) {
+    return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(v)
+  }
+
+  function buildSollecitoMsg() {
+    const scadute = rateDetail.filter(r => r.data_rata && new Date(r.data_rata) < new Date())
+    const tot = scadute.reduce((s, r) => s + r.importo, 0)
+    return `Gentile ${nome},\n\nle comunichiamo che risultano rate condominiali non ancora saldate per il ${edificioNome}.\n\nImporto totale dovuto: ${fmtEur(tot)}\n\nLa preghiamo di provvedere al pagamento quanto prima.\n\nCordiali saluti,\nAmministrazione Condominiale`
+  }
+
+  function buildEstrattoMsg() {
+    let msg = `Gentile ${nome},\n\ndi seguito il riepilogo delle rate condominiali per il ${edificioNome}:\n\n`
+    for (const r of rateDetail) {
+      msg += `${fmtDate(r.data_rata)} - ${r.descrizione}: ${fmtEur(r.importo)}\n`
+    }
+    msg += `\nTOTALE: ${fmtEur(totaleDovuto)}\n\nCordiali saluti,\nAmministrazione Condominiale`
+    return msg
+  }
+
+  function openWhatsApp(text) {
+    if (!cleanPhone) { alert('Nessun numero di telefono disponibile'); return }
+    const phone = cleanPhone.replace(/[^0-9]/g, '')
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank')
+  }
 
   return (
     <>
-      {/* Overlay */}
       <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
-
-      {/* Panel */}
       <div className="fixed top-0 right-0 h-full w-full max-w-md bg-white shadow-2xl z-50 overflow-y-auto animate-slide-in">
-        {/* Header */}
         <div className="sticky top-0 bg-primary px-5 py-5 flex items-center justify-between z-10">
           <div className="text-white min-w-0">
             <h2 className="font-bold text-lg truncate">{nome}</h2>
@@ -91,7 +169,6 @@ function DetailPanel({ unita, proprietario, conduttore, onClose }) {
         </div>
 
         <div className="p-5 space-y-4">
-          {/* Unità */}
           <Section icon={Home} title="Unità" color="primary">
             <Row label="Subalterno" value={unita.subalterno} />
             <Row label="Interno" value={unita.interno} />
@@ -99,10 +176,8 @@ function DetailPanel({ unita, proprietario, conduttore, onClose }) {
             <Row label="Scala" value={unita.scala} />
             <Row label="Tipo" value={unita.tipo} />
             {unita.millesimi_proprieta && <Row label="Millesimi" value={unita.millesimi_proprieta} />}
-            {unita.note && <Row label="Note" value={unita.note} />}
           </Section>
 
-          {/* Proprietario */}
           {proprietario && (
             <Section icon={User} title="Proprietario" color="accent">
               <Row label="Nome" value={proprietario.descrizione} bold />
@@ -114,20 +189,113 @@ function DetailPanel({ unita, proprietario, conduttore, onClose }) {
               <Row label="Telefono 3" value={proprietario.telefono3} link={proprietario.telefono3 ? `tel:${proprietario.telefono3}` : null} />
               <Row label="Email" value={proprietario.email} link={proprietario.email ? `mailto:${proprietario.email}` : null} />
               <Row label="PEC" value={proprietario.pec} link={proprietario.pec ? `mailto:${proprietario.pec}` : null} />
-              {proprietario.note && <Row label="Note" value={proprietario.note} />}
             </Section>
           )}
 
-          {/* Conduttore */}
           {conduttore && (
             <Section icon={Shield} title="Conduttore" color="success">
               <Row label="Nome" value={conduttore.descrizione} bold />
               <Row label="Codice Fiscale" value={conduttore.codice_fiscale} />
-              <Row label="Indirizzo" value={[conduttore.indirizzo, conduttore.citta, conduttore.cap].filter(Boolean).join(', ')} />
               <Row label="Telefono" value={conduttore.telefono1} link={conduttore.telefono1 ? `tel:${conduttore.telefono1}` : null} />
               <Row label="Email" value={conduttore.email} link={conduttore.email ? `mailto:${conduttore.email}` : null} />
-              <Row label="PEC" value={conduttore.pec} link={conduttore.pec ? `mailto:${conduttore.pec}` : null} />
             </Section>
+          )}
+
+          {/* SITUAZIONE RATE */}
+          <div className="rounded-xl border border-red-200 overflow-hidden">
+            <div className="bg-red-600 px-4 py-2.5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Wallet className="w-4 h-4 text-white" />
+                <h3 className="text-sm font-bold text-white uppercase tracking-wide">Situazione Rate</h3>
+              </div>
+              {!loadingRate && totaleDovuto > 0 && (
+                <span className="text-white font-bold text-sm">{fmtEur(totaleDovuto)}</span>
+              )}
+            </div>
+            <div className="bg-white">
+              {loadingRate ? (
+                <div className="p-4 text-center">
+                  <div className="w-5 h-5 border-2 border-red-200 border-t-red-600 rounded-full animate-spin mx-auto" />
+                </div>
+              ) : rateDetail.length === 0 ? (
+                <p className="p-4 text-sm text-text-muted text-center">Nessuna rata trovata</p>
+              ) : (
+                <div className="divide-y divide-border/20">
+                  {rateDetail.map((r, i) => {
+                    const scaduta = r.data_rata && new Date(r.data_rata) < new Date()
+                    return (
+                      <div key={i} className={`flex items-center justify-between px-4 py-2.5 ${scaduta ? 'bg-red-50' : ''}`}>
+                        <div>
+                          <p className={`text-sm font-medium ${scaduta ? 'text-red-700' : 'text-text-primary'}`}>{r.descrizione}</p>
+                          <p className="text-xs text-text-muted">{fmtDate(r.data_rata)}</p>
+                        </div>
+                        <span className={`text-sm font-bold ${scaduta ? 'text-red-700' : 'text-text-primary'}`}>
+                          {fmtEur(r.importo)}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* WHATSAPP */}
+          {totaleDovuto > 0 && (
+            <div className="rounded-xl border border-green-300 overflow-hidden">
+              <div className="bg-green-600 px-4 py-2.5 flex items-center gap-2">
+                <MessageCircle className="w-4 h-4 text-white" />
+                <h3 className="text-sm font-bold text-white uppercase tracking-wide">WhatsApp</h3>
+              </div>
+              <div className="bg-white p-4 space-y-2.5">
+                {!cleanPhone && (
+                  <p className="text-xs text-red-600 font-medium mb-2">Nessun numero di telefono disponibile</p>
+                )}
+                <button
+                  onClick={() => openWhatsApp(buildSollecitoMsg())}
+                  disabled={!cleanPhone}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-green-600 text-white font-semibold text-sm hover:bg-green-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Send className="w-4 h-4" />
+                  Sollecito pagamento
+                  <span className="ml-auto text-green-200 text-xs font-medium">{fmtEur(totaleDovuto)}</span>
+                </button>
+                <button
+                  onClick={() => openWhatsApp(buildEstrattoMsg())}
+                  disabled={!cleanPhone}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-green-50 text-green-700 border border-green-200 font-semibold text-sm hover:bg-green-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <FileText className="w-4 h-4" />
+                  Invia estratto conto
+                </button>
+                <button
+                  onClick={() => setWhatsappMode(whatsappMode === 'custom' ? null : 'custom')}
+                  disabled={!cleanPhone}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-white text-green-700 border border-green-200 font-semibold text-sm hover:bg-green-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  Messaggio personalizzato
+                </button>
+                {whatsappMode === 'custom' && (
+                  <div className="space-y-2 pt-1">
+                    <textarea
+                      value={customMsg}
+                      onChange={e => setCustomMsg(e.target.value)}
+                      placeholder={`Gentile ${nome},\n\n...`}
+                      rows={4}
+                      className="w-full px-3 py-2.5 border border-green-200 rounded-lg text-sm text-text-primary resize-none focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200"
+                    />
+                    <button
+                      onClick={() => openWhatsApp(customMsg)}
+                      disabled={!customMsg.trim()}
+                      className="w-full px-4 py-2.5 rounded-lg bg-green-600 text-white font-semibold text-sm hover:bg-green-700 transition-colors disabled:opacity-40"
+                    >
+                      Invia su WhatsApp
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           )}
         </div>
       </div>
@@ -425,6 +593,7 @@ function CondominiDettaglio({ edificio, onBack }) {
           unita={selected.unita}
           proprietario={selected.proprietario}
           conduttore={selected.conduttore}
+          edificio={edificio}
           onClose={() => setSelected(null)}
         />
       )}
