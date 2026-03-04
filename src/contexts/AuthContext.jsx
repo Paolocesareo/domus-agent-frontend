@@ -11,64 +11,72 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Controlla sessione attiva
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        fetchStudio(session.user.id)
-      } else {
-        setLoading(false)
-      }
-    })
+    let mounted = true
 
-    // Ascolta cambiamenti auth
+    async function init() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!mounted) return
+
+        const currentUser = session?.user ?? null
+        setUser(currentUser)
+
+        if (currentUser) {
+          const { data } = await supabase
+            .from('studios')
+            .select('*')
+            .eq('user_id', currentUser.id)
+            .maybeSingle()
+
+          if (mounted) setStudio(data || null)
+        }
+      } catch (err) {
+        console.error('Auth init error:', err)
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+
+    init()
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
-        setUser(session?.user ?? null)
-        if (session?.user) {
-          await fetchStudio(session.user.id)
+        if (!mounted) return
+        const currentUser = session?.user ?? null
+        setUser(currentUser)
+
+        if (currentUser) {
+          try {
+            const { data } = await supabase
+              .from('studios')
+              .select('*')
+              .eq('user_id', currentUser.id)
+              .maybeSingle()
+
+            if (mounted) setStudio(data || null)
+          } catch (err) {
+            console.error('Fetch studio error:', err)
+          }
         } else {
           setStudio(null)
-          setLoading(false)
         }
       }
     )
 
-    return () => subscription.unsubscribe()
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
   }, [])
 
-  async function fetchStudio(userId) {
-    try {
-      const { data, error } = await supabase
-        .from('studios')
-        .select('*')
-        .eq('user_id', userId)
-        .single()
-
-      if (data) {
-        setStudio(data)
-      }
-    } catch (err) {
-      console.error('Errore fetch studio:', err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
   async function signIn(email, password) {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
     return data
   }
 
   async function signUp(email, password) {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-    })
+    const { data, error } = await supabase.auth.signUp({ email, password })
     if (error) throw error
     return data
   }
@@ -78,15 +86,21 @@ export function AuthProvider({ children }) {
     if (error) throw error
   }
 
-  const value = {
-    user,
-    studio,
-    loading,
-    signIn,
-    signUp,
-    signOut,
-    refreshStudio: () => user && fetchStudio(user.id),
+  async function refreshStudio() {
+    if (!user) return
+    try {
+      const { data } = await supabase
+        .from('studios')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle()
+      setStudio(data || null)
+    } catch (err) {
+      console.error('Refresh studio error:', err)
+    }
   }
+
+  const value = { user, studio, loading, signIn, signUp, signOut, refreshStudio }
 
   return (
     <AuthContext.Provider value={value}>
