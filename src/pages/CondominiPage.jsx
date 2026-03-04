@@ -303,17 +303,23 @@ function CondominiDettaglio({ edificio, onBack }) {
         </div>
       </div>
 
-      {/* Stats compatte */}
+      {/* Stats compatte con colore */}
       <div className="flex gap-3 mb-4">
-        <span className="text-xs font-medium text-text-muted bg-surface-card border border-border/50 rounded-lg px-3 py-1.5">
-          {rows.length} unità
-        </span>
-        <span className="text-xs font-medium text-text-muted bg-surface-card border border-border/50 rounded-lg px-3 py-1.5">
-          {rows.filter(r => r.proprietario).length} proprietari
-        </span>
-        <span className="text-xs font-medium text-text-muted bg-surface-card border border-border/50 rounded-lg px-3 py-1.5">
-          {rows.filter(r => r.conduttore).length} conduttori
-        </span>
+        <div className="flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-lg px-3.5 py-2">
+          <Home className="w-4 h-4 text-primary" />
+          <span className="text-sm font-bold text-primary">{rows.length}</span>
+          <span className="text-xs text-primary/70">unità</span>
+        </div>
+        <div className="flex items-center gap-2 bg-accent/10 border border-accent/20 rounded-lg px-3.5 py-2">
+          <Users className="w-4 h-4 text-accent" />
+          <span className="text-sm font-bold text-accent">{rows.filter(r => r.proprietario).length}</span>
+          <span className="text-xs text-accent/70">proprietari</span>
+        </div>
+        <div className="flex items-center gap-2 bg-success/10 border border-success/20 rounded-lg px-3.5 py-2">
+          <Shield className="w-4 h-4 text-success" />
+          <span className="text-sm font-bold text-success">{rows.filter(r => r.conduttore).length}</span>
+          <span className="text-xs text-success/70">conduttori</span>
+        </div>
       </div>
 
       {loading ? (
@@ -338,32 +344,32 @@ function CondominiDettaglio({ edificio, onBack }) {
           {(() => {
             const filtered = getFilteredSorted()
             const SortIcon = ({ col }) => {
-              if (sortCol !== col) return <ChevronDown className="w-3 h-3 text-text-muted/40" />
+              if (sortCol !== col) return <ChevronDown className="w-3 h-3 text-white/30" />
               return sortDir === 'asc'
-                ? <ChevronUp className="w-3 h-3 text-primary" />
-                : <ChevronDown className="w-3 h-3 text-primary" />
+                ? <ChevronUp className="w-3 h-3 text-accent" />
+                : <ChevronDown className="w-3 h-3 text-accent" />
             }
             return (
               <div className="bg-surface-card rounded-xl border border-border/50 overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="bg-primary/5 border-b border-border/50">
-                        <th onClick={() => handleSort('subalterno')} className="text-left px-3 py-2.5 font-semibold text-text-secondary whitespace-nowrap cursor-pointer hover:text-primary select-none">
+                      <tr className="bg-primary text-white border-b border-primary-dark">
+                        <th onClick={() => handleSort('subalterno')} className="text-left px-3 py-2.5 font-semibold text-white/90 whitespace-nowrap cursor-pointer hover:text-white select-none">
                           <span className="inline-flex items-center gap-1">Sub. <SortIcon col="subalterno" /></span>
                         </th>
-                        <th className="text-left px-3 py-2.5 font-semibold text-text-secondary whitespace-nowrap">Tipo</th>
-                        <th onClick={() => handleSort('interno')} className="text-left px-3 py-2.5 font-semibold text-text-secondary whitespace-nowrap cursor-pointer hover:text-primary select-none">
+                        <th className="text-left px-3 py-2.5 font-semibold text-white/90 whitespace-nowrap">Tipo</th>
+                        <th onClick={() => handleSort('interno')} className="text-left px-3 py-2.5 font-semibold text-white/90 whitespace-nowrap cursor-pointer hover:text-white select-none">
                           <span className="inline-flex items-center gap-1">Int. <SortIcon col="interno" /></span>
                         </th>
-                        <th onClick={() => handleSort('piano')} className="text-left px-3 py-2.5 font-semibold text-text-secondary whitespace-nowrap cursor-pointer hover:text-primary select-none">
+                        <th onClick={() => handleSort('piano')} className="text-left px-3 py-2.5 font-semibold text-white/90 whitespace-nowrap cursor-pointer hover:text-white select-none">
                           <span className="inline-flex items-center gap-1">Piano <SortIcon col="piano" /></span>
                         </th>
-                        <th className="text-left px-3 py-2.5 font-semibold text-text-secondary whitespace-nowrap">Scala</th>
-                        <th onClick={() => handleSort('proprietario')} className="text-left px-3 py-2.5 font-semibold text-text-secondary whitespace-nowrap cursor-pointer hover:text-primary select-none min-w-[200px]">
+                        <th className="text-left px-3 py-2.5 font-semibold text-white/90 whitespace-nowrap">Scala</th>
+                        <th onClick={() => handleSort('proprietario')} className="text-left px-3 py-2.5 font-semibold text-white/90 whitespace-nowrap cursor-pointer hover:text-white select-none min-w-[200px]">
                           <span className="inline-flex items-center gap-1">Proprietario <SortIcon col="proprietario" /></span>
                         </th>
-                        <th onClick={() => handleSort('conduttore')} className="text-left px-3 py-2.5 font-semibold text-text-secondary whitespace-nowrap cursor-pointer hover:text-primary select-none min-w-[200px]">
+                        <th onClick={() => handleSort('conduttore')} className="text-left px-3 py-2.5 font-semibold text-white/90 whitespace-nowrap cursor-pointer hover:text-white select-none min-w-[200px]">
                           <span className="inline-flex items-center gap-1">Conduttore <SortIcon col="conduttore" /></span>
                         </th>
                       </tr>
@@ -376,18 +382,18 @@ function CondominiDettaglio({ edificio, onBack }) {
                           key={row.unita.id}
                           onClick={() => setSelected(row)}
                           className={`cursor-pointer transition-colors ${
-                            i % 2 === 0 ? 'bg-white' : 'bg-surface/40'
-                          } hover:bg-primary/5`}
+                            i % 2 === 0 ? 'bg-white' : 'bg-blue-50/50'
+                          } hover:bg-accent/10`}
                         >
-                          <td className="px-3 py-2 text-text-primary font-medium whitespace-nowrap">{row.unita.subalterno || '-'}</td>
-                          <td className="px-3 py-2 text-text-secondary whitespace-nowrap">{row.unita.tipo || '-'}</td>
-                          <td className="px-3 py-2 text-text-primary whitespace-nowrap">{row.unita.interno || '-'}</td>
-                          <td className="px-3 py-2 text-text-secondary whitespace-nowrap">{row.unita.piano || '-'}</td>
-                          <td className="px-3 py-2 text-text-secondary whitespace-nowrap">{row.unita.scala || '-'}</td>
-                          <td className="px-3 py-2 text-text-primary font-medium truncate max-w-[250px]">
+                          <td className="px-3 py-2.5 text-text-primary font-semibold whitespace-nowrap">{row.unita.subalterno || '-'}</td>
+                          <td className="px-3 py-2.5 text-text-primary whitespace-nowrap">{row.unita.tipo || '-'}</td>
+                          <td className="px-3 py-2.5 text-text-primary font-semibold whitespace-nowrap">{row.unita.interno || '-'}</td>
+                          <td className="px-3 py-2.5 text-text-primary whitespace-nowrap">{row.unita.piano || '-'}</td>
+                          <td className="px-3 py-2.5 text-text-primary whitespace-nowrap">{row.unita.scala || '-'}</td>
+                          <td className="px-3 py-2.5 text-text-primary font-medium truncate max-w-[250px]">
                             {row.proprietario?.descrizione || '-'}
                           </td>
-                          <td className="px-3 py-2 text-text-secondary truncate max-w-[200px]">
+                          <td className="px-3 py-2.5 text-text-primary truncate max-w-[200px]">
                             {row.conduttore?.descrizione || ''}
                           </td>
                         </tr>
