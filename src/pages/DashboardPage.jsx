@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import {
-  Building2, Users, Home, UserCheck, UserCog,
+  Building2, Users, Home, UserCheck,
   RefreshCw, LogOut, Clock, CheckCircle2, AlertTriangle,
-  ChevronRight, Database, FileText
+  Database, FileText
 } from 'lucide-react'
 
 const STATUS_CONFIG = {
@@ -91,11 +91,9 @@ export default function DashboardPage() {
   const [totals, setTotals] = useState({ edifici: 0, unita: 0, anagrafiche: 0, proprietari: 0, movimenti: 0 })
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
-  const [syncMessage, setSyncMessage] = useState('')
 
   async function triggerSync(archivioId) {
     setSyncing(true)
-    setSyncMessage('')
     try {
       const { data: { session } } = await supabase.auth.getSession()
       const response = await fetch(
@@ -109,20 +107,49 @@ export default function DashboardPage() {
           body: JSON.stringify({ archivio_id: archivioId }),
         }
       )
-      const result = await response.json()
       if (response.ok) {
-        setSyncMessage('Sincronizzazione avviata!')
-        // Ricarica dati dopo 2 secondi
-        setTimeout(() => loadData(), 2000)
-      } else {
-        setSyncMessage(`Errore: ${result.error || 'Sconosciuto'}`)
+        // Aggiorna lo stato localmente senza mostrare messaggi
+        setArchivi(prev => prev.map(a =>
+          a.id === archivioId ? { ...a, sync_status: 'queued' } : a
+        ))
+        // Poll per aggiornamenti ogni 5 secondi
+        startPolling()
       }
     } catch (err) {
       console.error('Errore sync:', err)
-      setSyncMessage('Errore di connessione')
     } finally {
       setSyncing(false)
     }
+  }
+
+  // Polling per aggiornare stato sync
+  function startPolling() {
+    let attempts = 0
+    const maxAttempts = 60 // 5 minuti max
+    const interval = setInterval(async () => {
+      attempts++
+      if (attempts >= maxAttempts) {
+        clearInterval(interval)
+        return
+      }
+      try {
+        const { data: archiviData } = await supabase
+          .from('archivi')
+          .select('*')
+          .eq('studio_id', studio.studio_id)
+          .order('nome_archivio')
+
+        if (archiviData) {
+          setArchivi(archiviData)
+          // Se nessun archivio è più in queued/running, fermati e ricarica tutto
+          const stillRunning = archiviData.some(a => a.sync_status === 'queued' || a.sync_status === 'running')
+          if (!stillRunning) {
+            clearInterval(interval)
+            loadData()
+          }
+        }
+      } catch (_) {}
+    }, 5000)
   }
 
   useEffect(() => {
@@ -136,7 +163,6 @@ export default function DashboardPage() {
   async function loadData() {
     setLoading(true)
     try {
-      // Carica archivi
       const { data: archiviData } = await supabase
         .from('archivi')
         .select('*')
@@ -145,7 +171,6 @@ export default function DashboardPage() {
 
       setArchivi(archiviData || [])
 
-      // Carica stats per ogni archivio
       const statsMap = {}
       let totEdifici = 0, totUnita = 0, totAnag = 0, totProp = 0, totMov = 0
 
@@ -245,11 +270,6 @@ export default function DashboardPage() {
                   {archivi.map((arch) => (
                     <ArchivioCard key={arch.id} archivio={arch} stats={stats[arch.id]} onSync={triggerSync} syncing={syncing} />
                   ))}
-                </div>
-              )}
-              {syncMessage && (
-                <div className={`mt-4 px-4 py-3 rounded-xl text-sm ${syncMessage.startsWith('Errore') ? 'bg-error/10 text-error' : 'bg-success/10 text-success'}`}>
-                  {syncMessage}
                 </div>
               )}
             </div>

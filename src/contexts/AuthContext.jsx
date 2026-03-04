@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext({})
@@ -10,53 +10,57 @@ export function AuthProvider({ children }) {
   const [studio, setStudio] = useState(null)
   const [loading, setLoading] = useState(true)
 
+  const fetchStudio = useCallback(async (userId) => {
+    try {
+      const { data } = await supabase
+        .from('studios')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle()
+      return data || null
+    } catch (err) {
+      console.error('Fetch studio error:', err)
+      return null
+    }
+  }, [])
+
   useEffect(() => {
     let mounted = true
+    let initializing = true
 
-    async function init() {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (!mounted) return
+    // Init: carica sessione esistente
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!mounted) return
+      const currentUser = session?.user ?? null
+      setUser(currentUser)
 
-        const currentUser = session?.user ?? null
-        setUser(currentUser)
-
-        if (currentUser) {
-          const { data } = await supabase
-            .from('studios')
-            .select('*')
-            .eq('user_id', currentUser.id)
-            .maybeSingle()
-
-          if (mounted) setStudio(data || null)
-        }
-      } catch (err) {
-        console.error('Auth init error:', err)
-      } finally {
-        if (mounted) setLoading(false)
+      if (currentUser) {
+        const studioData = await fetchStudio(currentUser.id)
+        if (mounted) setStudio(studioData)
       }
-    }
 
-    init()
+      if (mounted) {
+        setLoading(false)
+        initializing = false
+      }
+    }).catch(() => {
+      if (mounted) setLoading(false)
+      initializing = false
+    })
 
+    // Listener per cambiamenti auth (login, logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
         if (!mounted) return
+        // Ignora durante init per evitare doppia chiamata
+        if (initializing) return
+
         const currentUser = session?.user ?? null
         setUser(currentUser)
 
         if (currentUser) {
-          try {
-            const { data } = await supabase
-              .from('studios')
-              .select('*')
-              .eq('user_id', currentUser.id)
-              .maybeSingle()
-
-            if (mounted) setStudio(data || null)
-          } catch (err) {
-            console.error('Fetch studio error:', err)
-          }
+          const studioData = await fetchStudio(currentUser.id)
+          if (mounted) setStudio(studioData)
         } else {
           setStudio(null)
         }
@@ -67,11 +71,15 @@ export function AuthProvider({ children }) {
       mounted = false
       subscription.unsubscribe()
     }
-  }, [])
+  }, [fetchStudio])
 
   async function signIn(email, password) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
+    // Aggiorna subito user e studio senza aspettare il listener
+    setUser(data.user)
+    const studioData = await fetchStudio(data.user.id)
+    setStudio(studioData)
     return data
   }
 
@@ -84,20 +92,14 @@ export function AuthProvider({ children }) {
   async function signOut() {
     const { error } = await supabase.auth.signOut()
     if (error) throw error
+    setUser(null)
+    setStudio(null)
   }
 
   async function refreshStudio() {
     if (!user) return
-    try {
-      const { data } = await supabase
-        .from('studios')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle()
-      setStudio(data || null)
-    } catch (err) {
-      console.error('Refresh studio error:', err)
-    }
+    const studioData = await fetchStudio(user.id)
+    setStudio(studioData)
   }
 
   const value = { user, studio, loading, signIn, signUp, signOut, refreshStudio }
