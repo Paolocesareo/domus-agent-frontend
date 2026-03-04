@@ -122,6 +122,7 @@ function DetailPanel({ unita, proprietario, conduttore, edificio, onClose }) {
   }
 
   const totaleDovuto = rateDetail.reduce((s, r) => s + r.importo, 0)
+  const totaleScaduto = rateDetail.filter(r => r.data_rata && new Date(r.data_rata) < new Date()).reduce((s, r) => s + r.importo, 0)
   const edificioNome = edificio?.intestazione || ''
 
   function fmtDate(d) {
@@ -186,8 +187,8 @@ function DetailPanel({ unita, proprietario, conduttore, edificio, onClose }) {
               }`}
             >
               {tab.label}
-              {tab.id === 'rate' && !loadingRate && totaleDovuto > 0 && (
-                <span className="ml-1.5 text-xs bg-red-600 text-white px-1.5 py-0.5 rounded-full font-bold">{fmtEur(totaleDovuto)}</span>
+              {tab.id === 'rate' && !loadingRate && totaleScaduto > 0 && (
+                <span className="ml-1.5 text-xs bg-red-600 text-white px-1.5 py-0.5 rounded-full font-bold">{fmtEur(totaleScaduto)}</span>
               )}
             </button>
           ))}
@@ -267,8 +268,8 @@ function DetailPanel({ unita, proprietario, conduttore, edificio, onClose }) {
                       )
                     })}
                     <div className="flex items-center justify-between px-4 py-3 bg-red-600">
-                      <span className="text-sm font-bold text-white uppercase">Totale</span>
-                      <span className="text-base font-bold text-white">{fmtEur(totaleDovuto)}</span>
+                      <span className="text-sm font-bold text-white uppercase">Da pagare ad oggi</span>
+                      <span className="text-base font-bold text-white">{fmtEur(totaleScaduto)}</span>
                     </div>
                   </div>
                 )}
@@ -296,7 +297,7 @@ function DetailPanel({ unita, proprietario, conduttore, edificio, onClose }) {
                   >
                     <Send className="w-4 h-4" />
                     Sollecito pagamento
-                    {totaleDovuto > 0 && <span className="ml-auto text-green-200 text-xs font-medium">{fmtEur(totaleDovuto)}</span>}
+                    {totaleScaduto > 0 && <span className="ml-auto text-green-200 text-xs font-medium">{fmtEur(totaleScaduto)}</span>}
                   </button>
                   <button
                     onClick={() => openWhatsApp(buildEstrattoMsg())}
