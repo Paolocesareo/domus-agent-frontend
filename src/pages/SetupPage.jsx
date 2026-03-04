@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
-import { Building2, Plus, Trash2, AlertCircle } from 'lucide-react'
+import { Building2 } from 'lucide-react'
 
 export default function SetupPage() {
   const { user, refreshStudio } = useAuth()
@@ -9,42 +9,25 @@ export default function SetupPage() {
   const [cid, setCid] = useState('')
   const [domUser, setDomUser] = useState('')
   const [domPassword, setDomPassword] = useState('')
-  const [archivi, setArchivi] = useState([''])
+  const [archivio, setArchivio] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-
-  function addArchivio() {
-    setArchivi([...archivi, ''])
-  }
-
-  function removeArchivio(index) {
-    if (archivi.length === 1) return
-    setArchivi(archivi.filter((_, i) => i !== index))
-  }
-
-  function updateArchivio(index, value) {
-    const updated = [...archivi]
-    updated[index] = value
-    setArchivi(updated)
-  }
 
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
     setLoading(true)
 
-    const validArchivi = archivi.filter(a => a.trim() !== '')
-    if (validArchivi.length === 0) {
-      setError('Inserisci almeno un archivio')
+    if (!archivio.trim()) {
+      setError('Inserisci il nome del database')
       setLoading(false)
       return
     }
 
     try {
-      // Crea studio
       const studioId = studioName.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-')
       
-      const { data: studioData, error: studioError } = await supabase
+      const { error: studioError } = await supabase
         .from('studios')
         .insert({
           user_id: user.id,
@@ -58,18 +41,15 @@ export default function SetupPage() {
 
       if (studioError) throw studioError
 
-      // Crea archivi
-      for (const nomeArchivio of validArchivi) {
-        const { error: archError } = await supabase
-          .from('archivi')
-          .insert({
-            studio_id: studioId,
-            nome_archivio: nomeArchivio.trim(),
-            sync_status: 'pending',
-          })
+      const { error: archError } = await supabase
+        .from('archivi')
+        .insert({
+          studio_id: studioId,
+          nome_archivio: archivio.trim(),
+          sync_status: 'pending',
+        })
 
-        if (archError) throw archError
-      }
+      if (archError) throw archError
 
       await refreshStudio()
     } catch (err) {
@@ -104,7 +84,7 @@ export default function SetupPage() {
                 onChange={(e) => setStudioName(e.target.value)}
                 required
                 className="w-full px-4 py-3 rounded-xl border border-border bg-surface text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
-                placeholder="Es. Studio Cesareo"
+                placeholder="Il nome del tuo studio"
               />
             </div>
 
@@ -123,7 +103,7 @@ export default function SetupPage() {
                   onChange={(e) => setCid(e.target.value)}
                   required
                   className="w-full px-4 py-3 rounded-xl border border-border bg-surface-card text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
-                  placeholder="Es. 2637"
+                  placeholder="Il codice identificativo del tuo account"
                 />
               </div>
 
@@ -135,7 +115,7 @@ export default function SetupPage() {
                   onChange={(e) => setDomUser(e.target.value)}
                   required
                   className="w-full px-4 py-3 rounded-xl border border-border bg-surface-card text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
-                  placeholder="Es. admin"
+                  placeholder="Il tuo nome utente"
                 />
               </div>
 
@@ -147,59 +127,24 @@ export default function SetupPage() {
                   onChange={(e) => setDomPassword(e.target.value)}
                   required
                   className="w-full px-4 py-3 rounded-xl border border-border bg-surface-card text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
-                  placeholder="La password del tuo CloudConnector"
+                  placeholder="La tua password di accesso"
                 />
               </div>
             </div>
 
-            {/* Archivi */}
+            {/* Database */}
             <div>
-              <div className="flex items-center justify-between mb-3">
-                <label className="text-sm font-semibold text-text-primary">
-                  Archivi da sincronizzare
-                </label>
-                <button
-                  type="button"
-                  onClick={addArchivio}
-                  className="text-sm text-primary hover:text-primary-light font-medium flex items-center gap-1 transition-colors"
-                >
-                  <Plus className="w-4 h-4" /> Aggiungi
-                </button>
-              </div>
-              <p className="text-xs text-text-muted mb-3">
-                Il nome deve corrispondere esattamente a quello che vedi nel CloudConnector
-              </p>
-              <div className="space-y-2">
-                {archivi.map((archivio, index) => (
-                  <div key={index} className="flex gap-2">
-                    <input
-                      type="text"
-                      value={archivio}
-                      onChange={(e) => updateArchivio(index, e.target.value)}
-                      className="flex-1 px-4 py-3 rounded-xl border border-border bg-surface text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
-                      placeholder={`Es. Studio Cesareo`}
-                    />
-                    {archivi.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeArchivio(index)}
-                        className="p-3 rounded-xl text-text-muted hover:text-error hover:bg-error/10 transition-all"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Info sicurezza */}
-            <div className="flex items-start gap-3 bg-primary/5 rounded-xl p-4">
-              <AlertCircle className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-              <p className="text-xs text-text-secondary leading-relaxed">
-                Le credenziali vengono criptate e utilizzate esclusivamente per scaricare
-                i backup dal CloudConnector. Non accediamo mai al tuo gestionale in modo interattivo.
-              </p>
+              <label className="block text-sm font-medium text-text-secondary mb-1.5">
+                Nome del database
+              </label>
+              <input
+                type="text"
+                value={archivio}
+                onChange={(e) => setArchivio(e.target.value)}
+                required
+                className="w-full px-4 py-3 rounded-xl border border-border bg-surface text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                placeholder="Il nome esatto come appare su Domustudio"
+              />
             </div>
 
             {error && (
